@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+*.app
+*.dSYM
+NFCromancer-Mock.zip
+.DS_Store
+xcuserdata/
