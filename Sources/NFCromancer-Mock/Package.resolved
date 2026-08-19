@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "simbridgekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mickeyl/SimBridgeKit.git",
+      "state" : {
+        "revision" : "62150325af315ef2b4297497b2a52d55ac4f7541",
+        "version" : "0.1.2"
+      }
+    }
+  ],
+  "version" : 2
+}

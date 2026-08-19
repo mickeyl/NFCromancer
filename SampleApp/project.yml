@@ -1,0 +1,19 @@
+name: SampleApp
+options:
+  bundleIdPrefix: de.vanille
+packages:
+  NFCromancer:
+    path: ..
+targets:
+  SampleApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources: [Sources]
+    dependencies:
+      - package: NFCromancer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.vanille.nfcromancer-sample
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
