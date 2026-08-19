@@ -43,6 +43,33 @@
 - NDEF needs almost no proxy shims: `NFCNDEFPayload`/`NFCNDEFMessage` have
   public initializers. Only the `NFCTagReaderSession` tags are shim objects
   (protocol conformances, no private-class alloc).
+## Passthrough (phase 1, verified against live cards 2026-08-19)
+
+- `ReaderSource` wraps the reader via CryptoTokenKit. Slot `.validCard`/`.empty`
+  transitions are the RF field (tag arrival/removal), observed by KVO — no poll
+  loop. `TKSmartCardSlotManager.default` is nil without
+  `com.apple.security.smartcard` (in the entitlements from phase 0).
+- **Tag classification is from the FULL ATR bytes, not `historicalBytes`.**
+  CryptoTokenKit does not parse the historical-byte field out of these PICC
+  ATRs, so `classify()` locates the PC/SC storage template `A0 00 00 03 06`
+  anywhere in `atr.bytes`: present means Type 2 storage (FF pseudo-APDUs only),
+  absent means ISO-DEP / ISO7816 (real APDUs). The naive "long historical bytes
+  = ISO-DEP" guess is exactly backwards and cost an afternoon.
+- **Verified card ATRs** (`3B 8F 80 01 80 4F 0C A0 00 00 03 06 03 <NN NN> ...`),
+  card name `NN NN`: `0003` = NTAG/Ultralight (Type 2, FF B0 NDEF read works —
+  read a real 2-record NDEF end to end), `0001`/`0002` = MIFARE Classic (needs
+  sector key auth before reads, out of v1 scope — FF B0 returns 6300).
+- NDEF: `NDEFReader` reads Type 2 via `FF B0` page reads + TLV parse, Type 4
+  via SELECT NDEF app then CC then file. Every APDU is fallible; a card that
+  mutes or refuses yields no NDEF, never a crash.
+- ISO7816 raw APDU passthrough: `NFRISO7816Tag` (library shim) then
+  `sendAPDU`/`apduResponse` then `ReaderSource.sendAPDU` then
+  `TKSmartCard.transmit`. Verified `FF CA 00 00` returns a UID with SW 9000
+  through the whole stack.
+- Logging goes through `Cornucopia.Core.Logger` (LOGLEVEL/LOGSINK
+  configurable); the dependency-free ObjC simulator library keeps its gated
+  NSLog on purpose (blast-radius: no dependencies in the swizzle library).
+
 - Sibling projects: `~/Documents/late/ImpossiBLE` and
   `~/Documents/late/CAMouflage` — when in doubt about a pattern, look there.
   The off-body icon rules (pre-scaled via `sbkScaled`, `drawingGroup` over

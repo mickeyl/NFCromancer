@@ -1,7 +1,11 @@
 # NFCromancer — Implementation Plan
 
-> **Status (2026-08-19): draft, pre-implementation.** Phase order decided:
-> ACR122U passthrough first (the reader is on the desk), mock second.
+> **Status (2026-08-19): phases 0 and 1 done, validated against live hardware.**
+> The scaffold serves the socket on SimBridgeKit; the ACR122U passthrough
+> reads Type 2 NDEF (a real 2-record NTAG end to end) and round-trips raw
+> APDUs to ISO7816/storage cards. Card classification is fixed (full-ATR
+> template match). Logging goes through CornucopiaCore. Mock mode (phase 2)
+> and client fixtures (phase 3) are next.
 
 **Use real NFC hardware from the iOS Simulator.**
 
