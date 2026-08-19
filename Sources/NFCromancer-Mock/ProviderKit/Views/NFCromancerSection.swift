@@ -263,6 +263,29 @@ public struct NFCromancerSection: View {
         }
     }
 
+    /// The UID of the card most recently copied into the library, so the button
+    /// can confirm the save. A new card carries a different UID, resetting it.
+    @State private var capturedUID: String?
+
+    @ViewBuilder
+    private func captureButton(_ tag: PresentedTag) -> some View {
+        let saved = capturedUID == tag.uidHex
+        Button {
+            store.add(MockTag.captured(uidHex: tag.uidHex, ndef: tag.ndef))
+            capturedUID = tag.uidHex
+        } label: {
+            Label(saved ? "Saved to Library" : "Copy to Library",
+                  systemImage: saved ? "checkmark" : "square.and.arrow.down")
+        }
+        .controlSize(.small)
+        .tint(saved ? .green : nil)
+        .disabled(saved)
+        .padding(.top, 4)
+        .help(tag.hasNDEF
+              ? "Snapshot this card's NDEF and UID into the mock library."
+              : "This card exposes no NDEF; only its UID is captured (a blank tag).")
+    }
+
     @ViewBuilder
     private var passthroughBody: some View {
         VStack(spacing: 14) {
@@ -286,6 +309,7 @@ public struct NFCromancerSection: View {
                             .foregroundStyle(.green)
                     }
                 }
+                captureButton(tag)
             } else if server.readerAvailable {
                 Image(systemName: "wave.3.right.circle")
                     .font(.system(size: 40))

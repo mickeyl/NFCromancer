@@ -33,6 +33,18 @@ public struct MockTag: Identifiable, Codable, Equatable {
         self.uid = uid
     }
 
+    /// Snapshot a real card seen in passthrough into a persistent mock. The
+    /// NDEF message is kept verbatim as raw bytes so re-presenting reproduces
+    /// the card exactly; a card without NDEF yields a blank tag carrying only
+    /// its UID (secured cards can't be reproduced beyond that — no keys, no
+    /// challenge/response).
+    public static func captured(uidHex: String, ndef: Data?) -> MockTag {
+        let shortUID = hexData(uidHex)?.prefix(4).map { String(format: "%02X", $0) }.joined(separator: " ")
+        let name = shortUID.map { "Captured \($0)" } ?? "Captured card"
+        let value = ndef.map { $0.map { String(format: "%02X", $0) }.joined() } ?? ""
+        return MockTag(name: name, kind: .raw, value: value, uid: uidHex)
+    }
+
     /// The 7-byte UID bytes to report, deriving a stable synthetic one from the
     /// id when none was set (NXP-style `04` prefix, like a real NTAG).
     public var uidBytes: Data {

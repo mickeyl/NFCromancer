@@ -348,10 +348,13 @@ public final class TagServer: ObservableObject {
     // MARK: - Publishing
 
     private func publishPresentedTag(_ tag: ReaderTag) {
+        let ndef = (tag.ndef?.isEmpty ?? true) ? nil : tag.ndef
         let presented = PresentedTag(
             uid: tag.uid.map { String(format: "%02X", $0) }.joined(separator: " "),
+            uidHex: tag.uid.map { String(format: "%02x", $0) }.joined(),
             tech: tag.tech == .iso7816 ? "ISO7816 (ISO-DEP)" : "Type 2 (NTAG/Ultralight)",
-            hasNDEF: tag.ndef != nil && !(tag.ndef?.isEmpty ?? true)
+            hasNDEF: ndef != nil,
+            ndef: ndef
         )
         DispatchQueue.main.async { self.presentedTag = presented }
     }
@@ -363,7 +366,12 @@ public final class TagServer: ObservableObject {
 
 /// A tag in the field, for the panel.
 public struct PresentedTag: Equatable {
+    /// UID as spaced uppercase hex, for display.
     public let uid: String
+    /// UID as compact lowercase hex, the form a captured mock stores.
+    public let uidHex: String
     public let tech: String
     public let hasNDEF: Bool
+    /// The NDEF message read on arrival, for snapshotting into the library.
+    public let ndef: Data?
 }
