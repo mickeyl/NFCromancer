@@ -91,6 +91,15 @@
   the naive read surfaces the "en" language prefix. The provider's encoding is
   correct; CoreNFC hands over the structured raw payload by design.
 
+## Logging
+
+Provider logging is `Cornucopia.Core.Logger` (see the logging directive). To
+see output from a **release** build (`make mock` is release), pass both env
+vars: `LOGLEVEL=TRACE LOGSINK=print://`. `LOGLEVEL` alone is not enough — the
+logger's default sink is nil in release (PrintLogger only in DEBUG builds), so
+`make mock-debug` shows logs without a LOGSINK but `make mock` does not.
+Output goes to stderr as `[subsystem:category] <thread> (LEVEL) message`.
+
 ## Build And Verification
 
 ```bash
