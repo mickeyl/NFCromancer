@@ -147,6 +147,52 @@ public struct NFCromancerSection: View {
 
     @ViewBuilder
     private var mockBody: some View {
+        // A client-supplied fixture replaces the library, so it must replace
+        // what the panel shows too — otherwise the panel describes tags that
+        // are not being served.
+        if let config = server.clientConfiguration {
+            clientConfigBody(config)
+        } else {
+            libraryBody
+        }
+    }
+
+    private func clientConfigBody(_ config: ClientTagConfiguration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "iphone.and.arrow.forward")
+                    .foregroundStyle(.orange)
+                Text(config.name ?? "Test fixtures")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text("\(config.tags.count) tag(s)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(Color.orange.opacity(0.10))
+            Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(config.tags) { tag in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(tag.name ?? tag.id).font(.subheadline).lineLimit(1)
+                            Text("\(tag.kind.title) · \(tag.value)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            Text("Presented programmatically by the test; your library resumes when it disconnects.")
+                .font(.caption2).foregroundStyle(.secondary)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder
+    private var libraryBody: some View {
         VStack(spacing: 0) {
             HStack {
                 Text(server.sessionWaiting ? "Session waiting — tap a tag to present it" : "No session — start a scan in the app")

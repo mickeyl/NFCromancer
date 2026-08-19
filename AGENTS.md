@@ -91,6 +91,21 @@
   the naive read surfaces the "en" language prefix. The provider's encoding is
   correct; CoreNFC hands over the structured raw payload by design.
 
+## Client fixtures (phase 3)
+
+- A test owns its tags via the library API: `NFCromancerSetMockConfiguration`
+  (JSON `{"tags":[{"id","kind","value",...}]}`), `NFCromancerPresentTag(id)`
+  (the programmatic tap — no menu-bar click, no physical card),
+  `NFCromancerClearMockConfiguration`.
+- Server side: `clientSuppliedTags` (keyed by wire id) is in-memory only,
+  never persisted, cleared on disconnect (`tearDownClientState`) — the three
+  invariants. The panel swaps in a read-only fixture banner + list while a
+  client configuration is active (`clientConfiguration`).
+- `SampleApp/Tests/NFCromancerFixtureTests` is the end-to-end proof: upload a
+  URI fixture, begin a real NFCNDEFReaderSession, present it, assert the
+  delegate's `wellKnownTypeURIPayload()`. Runs headless against a provider in
+  Mock mode — `make mock` then the SampleAppTests scheme.
+
 ## Logging
 
 Provider logging is `Cornucopia.Core.Logger` (see the logging directive). To

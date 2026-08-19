@@ -257,8 +257,33 @@ BOOL NFCromancerIsProviderConnected(void) {
     return NFRConnectionIsConnected();
 }
 
+BOOL NFCromancerSetMockConfiguration(NSData *json) {
+    NFRConnectionOpen();
+    id config = [NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];
+    if (![config isKindOfClass:[NSDictionary class]]) {
+        return NO;
+    }
+    NFRConnectionSend(@{ @"type": @"setMockConfiguration", @"configuration": config });
+    return YES;
+}
+
+BOOL NFCromancerPresentTag(NSString *tagId) {
+    if (tagId.length == 0) {
+        return NO;
+    }
+    NFRConnectionSend(@{ @"type": @"presentTag", @"tagId": tagId });
+    return YES;
+}
+
+void NFCromancerClearMockConfiguration(void) {
+    NFRConnectionSend(@{ @"type": @"clearMockConfiguration" });
+}
+
 #else
 
 BOOL NFCromancerIsProviderConnected(void) { return NO; }
+BOOL NFCromancerSetMockConfiguration(NSData *json) { return NO; }
+BOOL NFCromancerPresentTag(NSString *tagId) { return NO; }
+void NFCromancerClearMockConfiguration(void) {}
 
 #endif

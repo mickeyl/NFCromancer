@@ -17,3 +17,15 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: de.vanille.nfcromancer-sample
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  SampleAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources: [Tests]
+    dependencies:
+      - target: SampleApp
+      - package: NFCromancer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.vanille.nfcromancer-sample-tests
+        GENERATE_INFOPLIST_FILE: YES

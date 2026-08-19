@@ -34,6 +34,12 @@ public final class TagServer: ObservableObject {
     /// True while a simulator session is waiting for a tag — the panel enables
     /// its Present buttons only then.
     @Published public private(set) var sessionWaiting = false
+    /// Fixtures uploaded by the connected client, shown read-only in the panel.
+    @Published public private(set) var clientConfiguration: ClientTagConfiguration?
+
+    /// Client-uploaded fixtures, keyed by their wire id. Deliberately in-memory
+    /// only: never persisted to the user's library, cleared with the connection.
+    private var clientSuppliedTags: [String: MockTag]?
 
     // Guarded by the transport's I/O queue
     private var serveMode: ServeMode = .mock
@@ -96,29 +102,32 @@ public final class TagServer: ObservableObject {
 
     /// Deliver a mock tag into the waiting session (the panel's "tap").
     public func present(_ tag: MockTag) {
-        transport.performOnIOQueue { [weak self] in
-            guard let self, self.serveMode == .mock, self.sessionId != nil else { return }
-            if self.currentMockTag != nil { self.retractMockTag() }
-            self.currentMockTag = tag
-            DispatchQueue.main.async { self.presentedMockTagId = tag.id }
+        transport.performOnIOQueue { [weak self] in self?.deliverMockTag(tag) }
+    }
 
-            self.tagGeneration += 1
-            let tagId = "\(self.tagGeneration)"
-            self.currentTagId = tagId
+    /// Shared delivery for panel-presented and client-fixture tags.
+    private func deliverMockTag(_ tag: MockTag) {
+        guard sessionId != nil else { return }
+        if currentMockTag != nil { retractMockTag() }
+        currentMockTag = tag
+        DispatchQueue.main.async { self.presentedMockTagId = tag.id }
 
-            var payload: [String: Any] = [
-                "type": "tagDetected",
-                "sessionId": self.sessionId!,
-                "tagId": tagId,
-                "tech": "type2",
-                "uid": tag.uidBytes.map { String(format: "%02x", $0) }.joined(),
-            ]
-            if let ndef = tag.ndefMessage {
-                payload["ndef"] = ndef.base64EncodedString()
-            }
-            self.transport.send(payload)
-            self.transport.note("Presented '\(tag.name)'")
+        tagGeneration += 1
+        let tagId = "\(tagGeneration)"
+        currentTagId = tagId
+
+        var payload: [String: Any] = [
+            "type": "tagDetected",
+            "sessionId": sessionId!,
+            "tagId": tagId,
+            "tech": "type2",
+            "uid": tag.uidBytes.map { String(format: "%02x", $0) }.joined(),
+        ]
+        if let ndef = tag.ndefMessage {
+            payload["ndef"] = ndef.base64EncodedString()
         }
+        transport.send(payload)
+        transport.note("Presented '\(tag.name)'")
     }
 
     /// Remove the presented mock tag from the field.
@@ -142,8 +151,10 @@ public final class TagServer: ObservableObject {
         sessionKind = nil
         currentTagId = nil
         currentMockTag = nil
+        clientSuppliedTags = nil
         tagGeneration += 1
         publishSessionWaiting(false)
+        publishClientConfiguration(nil)
         DispatchQueue.main.async { self.presentedMockTagId = nil }
         clearPresentedTag()
     }
@@ -162,9 +173,66 @@ public final class TagServer: ObservableObject {
             case "connectTag":    handleConnectTag(message)
             case "sendAPDU":      handleSendAPDU(message)
             case "restartPolling": break   // the field is always polling in passthrough
+            case "setMockConfiguration":   handleSetMockConfiguration(message)
+            case "clearMockConfiguration": clearClientConfiguration()
+            case "presentTag":    handlePresentTag(message)
             default:
                 transport.note("Ignoring unknown message type \(type)")
         }
+    }
+
+    // MARK: - Client-supplied fixtures (transport I/O queue)
+
+    private func handleSetMockConfiguration(_ message: [String: Any]) {
+        guard let raw = message["configuration"] ?? message["tags"].map({ ["tags": $0] }) else {
+            sendConfigurationResult(ok: false, error: "missing configuration")
+            return
+        }
+        do {
+            let data = try JSONSerialization.data(withJSONObject: raw)
+            let config = try JSONDecoder().decode(ClientTagConfiguration.self, from: data)
+            var byId: [String: MockTag] = [:]
+            for t in config.tags {
+                byId[t.id] = t.asMockTag
+            }
+            clientSuppliedTags = byId
+            publishClientConfiguration(config)
+            sendConfigurationResult(ok: true, error: nil)
+            transport.note("Client supplied \(byId.count) fixture tag(s)")
+        } catch {
+            // Fail loudly: a malformed fixture is otherwise indistinguishable
+            // from an empty environment.
+            transport.note("Rejected client fixtures: \(error.localizedDescription)")
+            sendConfigurationResult(ok: false, error: error.localizedDescription)
+        }
+    }
+
+    private func clearClientConfiguration() {
+        guard clientSuppliedTags != nil else { return }
+        clientSuppliedTags = nil
+        publishClientConfiguration(nil)
+        transport.note("Client fixtures cleared")
+    }
+
+    private func handlePresentTag(_ message: [String: Any]) {
+        guard let tagKey = message["tagId"] as? String else { return }
+        guard let tag = clientSuppliedTags?[tagKey] else {
+            transport.send(["type": "didPresentTag", "tagId": tagKey, "ok": false,
+                            "error": "no fixture tag '\(tagKey)'"])
+            return
+        }
+        deliverMockTag(tag)
+        transport.send(["type": "didPresentTag", "tagId": tagKey, "ok": true])
+    }
+
+    private func sendConfigurationResult(ok: Bool, error: String?) {
+        var msg: [String: Any] = ["type": "didSetMockConfiguration", "ok": ok]
+        if let error { msg["error"] = error }
+        transport.send(msg)
+    }
+
+    private func publishClientConfiguration(_ config: ClientTagConfiguration?) {
+        DispatchQueue.main.async { self.clientConfiguration = config }
     }
 
     private func handleBeginSession(_ message: [String: Any]) {
