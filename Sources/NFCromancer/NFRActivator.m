@@ -1,6 +1,7 @@
 #import "include/NFCromancer.h"
 #import "NFRConnection.h"
 #import "NFRTagShim.h"
+#import "NFRScanSheet.h"
 #import <CoreNFC/CoreNFC.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -9,6 +10,7 @@
 
 static void *kNFRSessionKindKey = &kNFRSessionKindKey;
 static void *kNFRSessionIdKey = &kNFRSessionIdKey;
+static void *kNFRAlertMessageKey = &kNFRAlertMessageKey;
 
 // The one active session, tracked so socket messages can be routed back to its
 // delegate on its queue. CoreNFC allows one reader session at a time.
@@ -77,6 +79,21 @@ static void nfr_begin(id self, SEL _cmd) {
     NFRConnectionOpen();
     NFRConnectionSend(@{ @"type": @"beginSession", @"sessionId": @(sid), @"kind": kind });
     NSLog(@"NFCromancer: beginSession sid=%d kind=%@", sid, kind);
+
+    // Imitate the iOS system scan sheet the Simulator never shows. Its Cancel
+    // button invalidates the session just as the real one does.
+    NSString *message = objc_getAssociatedObject(self, kNFRAlertMessageKey);
+    __weak id weakSession = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NFRScanSheet presentWithMessage:message onCancel:^{
+            id strongSession = weakSession;
+            if (strongSession) {
+                ((void (*)(id, SEL))objc_msgSend)(strongSession, @selector(invalidateSession));
+            } else {
+                [NFRScanSheet dismiss];
+            }
+        }];
+    });
 }
 
 static void nfr_invalidate(id self, SEL _cmd) {
@@ -88,6 +105,7 @@ static void nfr_invalidate(id self, SEL _cmd) {
         gActiveSession = nil;
         gActiveKind = nil;
     }
+    dispatch_async(dispatch_get_main_queue(), ^{ [NFRScanSheet dismiss]; });
 }
 
 static void nfr_invalidate_message(id self, SEL _cmd, NSString *message) {
@@ -95,7 +113,10 @@ static void nfr_invalidate_message(id self, SEL _cmd, NSString *message) {
 }
 
 static void nfr_set_alert_message(id self, SEL _cmd, NSString *message) {
-    // Accepted and ignored: no system scan sheet exists in the simulator.
+    // Stored and reflected in the imitation scan sheet, mirroring how iOS
+    // shows `alertMessage` on the real system sheet.
+    objc_setAssociatedObject(self, kNFRAlertMessageKey, message, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    dispatch_async(dispatch_get_main_queue(), ^{ [NFRScanSheet updateMessage:message]; });
 }
 
 // connectToTag:completionHandler:
@@ -175,6 +196,9 @@ static void nfr_handle_message(NSDictionary *msg) {
         return;
     }
     if ([type isEqualToString:@"tagDetected"]) {
+        // A tag arrived: flash the sheet's success state, then dismiss — the
+        // same choreography as the real system sheet.
+        dispatch_async(dispatch_get_main_queue(), ^{ [NFRScanSheet dismissWithSuccess:nil]; });
         NSString *ndefB64 = msg[@"ndef"];
         if ([gActiveKind isEqualToString:@"ndef"] && [ndefB64 isKindOfClass:[NSString class]]) {
             NSData *ndef = [[NSData alloc] initWithBase64EncodedString:ndefB64 options:0];

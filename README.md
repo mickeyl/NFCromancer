@@ -24,9 +24,11 @@ app once released.
 
 > **Status: 0.1.0-dev, phase 0.** The scaffold is functional: the library
 > swizzles `readingAvailable` to reflect provider connectivity, and the menu
-> bar provider serves the socket with the shared transport (hello handshake,
-> takeover, ownership guard). Sessions, ACR122U passthrough, and mock tags
-> land phase by phase — see [PLAN.md](PLAN.md).
+> bar provider serves the socket with the shared transport. Passthrough
+> (ACR122U via CryptoTokenKit), a mock tag library, and client-supplied
+> fixtures all work. The library also imitates the iOS "Ready to Scan" system
+> sheet automatically while a session is active — the Simulator shows nothing
+> otherwise. See [PLAN.md](PLAN.md).
 
 ## Quick Start
 

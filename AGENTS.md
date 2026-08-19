@@ -106,6 +106,17 @@
   delegate's `wellKnownTypeURIPayload()`. Runs headless against a provider in
   Mock mode — `make mock` then the SampleAppTests scheme.
 
+## Scan sheet imitation
+
+`NFRScanSheet` (UIKit, library side) shows an imitation of the iOS system
+"Ready to Scan" sheet automatically while a reader session is active — CoreNFC
+presents this on device but the Simulator shows nothing, so apps relying on
+the visual affordance would behave differently. `beginSession` presents it,
+`setAlertMessage:` updates its text, a tag detection flashes success and
+dismisses, invalidation/cancel dismisses. Its Cancel button invalidates the
+session like the real one. No app change needed. It is UIKit on the main
+thread via a dedicated UIWindow above the alert level.
+
 ## Logging
 
 Provider logging is `Cornucopia.Core.Logger` (see the logging directive). To
