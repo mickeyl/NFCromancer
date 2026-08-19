@@ -26,12 +26,22 @@ public final class TagServer: ObservableObject {
     @Published public private(set) var presentedTag: PresentedTag?
     @Published public private(set) var readerAvailable = false
 
+    /// The mock tag library, exposed so the panel can present tags.
+    public let store = TagStore()
+    /// A mock tag the panel has presented into the active session, so it can
+    /// show which one is "on the reader" and offer to remove it.
+    @Published public private(set) var presentedMockTagId: UUID?
+    /// True while a simulator session is waiting for a tag — the panel enables
+    /// its Present buttons only then.
+    @Published public private(set) var sessionWaiting = false
+
     // Guarded by the transport's I/O queue
     private var serveMode: ServeMode = .mock
     private var sessionId: Int?
     private var sessionKind: String?          // "ndef" | "tag"
     private var currentTagId: String?
     private var tagGeneration = 0             // bumped on every arrival/removal
+    private var currentMockTag: MockTag?
     private let reader = ReaderSource()
 
     private static let serverEnabledKey = "ServerEnabled"
@@ -82,14 +92,64 @@ public final class TagServer: ObservableObject {
         transport.stop(completion: completion)
     }
 
+    // MARK: - Mock tag presentation
+
+    /// Deliver a mock tag into the waiting session (the panel's "tap").
+    public func present(_ tag: MockTag) {
+        transport.performOnIOQueue { [weak self] in
+            guard let self, self.serveMode == .mock, self.sessionId != nil else { return }
+            if self.currentMockTag != nil { self.retractMockTag() }
+            self.currentMockTag = tag
+            DispatchQueue.main.async { self.presentedMockTagId = tag.id }
+
+            self.tagGeneration += 1
+            let tagId = "\(self.tagGeneration)"
+            self.currentTagId = tagId
+
+            var payload: [String: Any] = [
+                "type": "tagDetected",
+                "sessionId": self.sessionId!,
+                "tagId": tagId,
+                "tech": "type2",
+                "uid": tag.uidBytes.map { String(format: "%02x", $0) }.joined(),
+            ]
+            if let ndef = tag.ndefMessage {
+                payload["ndef"] = ndef.base64EncodedString()
+            }
+            self.transport.send(payload)
+            self.transport.note("Presented '\(tag.name)'")
+        }
+    }
+
+    /// Remove the presented mock tag from the field.
+    public func retract() {
+        transport.performOnIOQueue { [weak self] in self?.retractMockTag() }
+    }
+
+    private func retractMockTag() {
+        guard let sid = sessionId, let tagId = currentTagId, currentMockTag != nil else { return }
+        currentMockTag = nil
+        currentTagId = nil
+        DispatchQueue.main.async { self.presentedMockTagId = nil }
+        transport.send(["type": "tagRemoved", "sessionId": sid, "tagId": tagId])
+        transport.note("Retracted mock tag")
+    }
+
     // MARK: - Connection lifecycle (transport I/O queue)
 
     private func tearDownClientState() {
         sessionId = nil
         sessionKind = nil
         currentTagId = nil
+        currentMockTag = nil
         tagGeneration += 1
+        publishSessionWaiting(false)
+        DispatchQueue.main.async { self.presentedMockTagId = nil }
         clearPresentedTag()
+    }
+
+    private func publishSessionWaiting(_ waiting: Bool) {
+        DispatchQueue.main.async { self.sessionWaiting = waiting }
     }
 
     // MARK: - Protocol handling (transport I/O queue)
@@ -118,6 +178,7 @@ public final class TagServer: ObservableObject {
         sessionKind = (message["kind"] as? String) ?? "ndef"
         transport.send(["type": "didBeginSession", "sessionId": sid, "ok": true])
         transport.note("Session \(sid) began (\(sessionKind ?? "ndef"))")
+        publishSessionWaiting(true)
 
         // A tag already resting on the reader when the session starts should be
         // delivered immediately, mirroring how iOS reports a present tag.
@@ -131,6 +192,9 @@ public final class TagServer: ObservableObject {
         sessionId = nil
         sessionKind = nil
         currentTagId = nil
+        currentMockTag = nil
+        publishSessionWaiting(false)
+        DispatchQueue.main.async { self.presentedMockTagId = nil }
         transport.note("Session \(sid) ended")
     }
 

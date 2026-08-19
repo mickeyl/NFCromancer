@@ -47,6 +47,7 @@ final class ReaderSource {
 
     func start() {
         queue.async { [self] in
+            logger.info("Reader source starting")
             guard let manager else {
                 logger.error("No smartcard slot manager — is the com.apple.security.smartcard entitlement present?")
                 return

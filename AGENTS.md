@@ -76,6 +76,21 @@
   the shadow) exist because the Simsalabim splitter resizes sections at
   mouse-event rate.
 
+## Mock mode (phase 2)
+
+- `TagStore` persists the virtual tag library (`~/Library/Application
+  Support/NFCromancer/tags.json`), `MockTag` encodes NDEF (well-known URI/Text
+  records, or raw hex) with public-initializer-free byte building.
+- An NFC tag is an *event*: `TagServer.present(_:)` is the panel's "tap" — it
+  delivers `tagDetected` into the waiting session, `retract()` sends
+  `tagRemoved`. `sessionWaiting` gates the panel's Present buttons (enabled
+  only while a simulator session is open). One tag in the field at a time.
+- A **Text record's payload is not a plain string**: it prefixes a status byte
+  + language code. Consumers must use `wellKnownTypeTextPayload()` /
+  `wellKnownTypeURIPayload()` (see SampleApp), not `String(data: payload)` —
+  the naive read surfaces the "en" language prefix. The provider's encoding is
+  correct; CoreNFC hands over the structured raw payload by design.
+
 ## Build And Verification
 
 ```bash

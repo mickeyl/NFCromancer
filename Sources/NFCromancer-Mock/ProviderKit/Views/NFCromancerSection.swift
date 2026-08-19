@@ -9,6 +9,7 @@ import SimBridgeShell
 /// section among several providers.
 public struct NFCromancerSection: View {
     @ObservedObject var server: TagServer
+    @ObservedObject var store: TagStore
     @ObservedObject var transport: ProtocolServer
     @ObservedObject var controller: ModeTransitionController<ProviderMode>
     /// A host that surfaces the connected client on its own level (the suite
@@ -22,6 +23,7 @@ public struct NFCromancerSection: View {
         showsClient: Bool = true
     ) {
         self.server = server
+        self.store = server.store
         self.transport = transport
         self.controller = controller
         self.showsClient = showsClient
@@ -50,10 +52,7 @@ public struct NFCromancerSection: View {
                 case .off:
                     offBody
                 case .mock:
-                    placeholderBody(
-                        systemImage: "wand.and.stars",
-                        message: "Mock tags arrive in phase 2 — the provider is listening, but has nothing to present yet."
-                    )
+                    mockBody
                 case .passthrough:
                     passthroughBody
             }
@@ -140,6 +139,82 @@ public struct NFCromancerSection: View {
             Spacer(minLength: 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Mock body
+
+    @State private var showAddSheet = false
+
+    @ViewBuilder
+    private var mockBody: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(server.sessionWaiting ? "Session waiting — tap a tag to present it" : "No session — start a scan in the app")
+                    .font(.caption)
+                    .foregroundStyle(server.sessionWaiting ? Color.green : .secondary)
+                Spacer()
+                Button {
+                    showAddSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help("Add a tag")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 1) {
+                    ForEach(store.tags) { tag in
+                        mockTagRow(tag)
+                    }
+                    if store.tags.isEmpty {
+                        Text("No tags — add one with +")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .sheet(isPresented: $showAddSheet) {
+            MockTagEditor { newTag in store.add(newTag) }
+        }
+    }
+
+    private func mockTagRow(_ tag: MockTag) -> some View {
+        let isPresented = server.presentedMockTagId == tag.id
+        return HStack(spacing: 8) {
+            Image(systemName: tag.kind == .uri ? "link" : tag.kind == .text ? "text.alignleft" : "number")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tag.name).font(.subheadline).lineLimit(1)
+                Text(tag.value)
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer()
+            if isPresented {
+                Button("Remove") { server.retract() }
+                    .font(.caption).controlSize(.small).tint(.orange)
+            } else {
+                Button("Present") { server.present(tag) }
+                    .font(.caption).controlSize(.small)
+                    .disabled(!server.sessionWaiting)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isPresented ? Color.green.opacity(0.08) : .clear)
+        .contextMenu {
+            Button("Delete", role: .destructive) { store.delete(id: tag.id) }
+        }
     }
 
     @ViewBuilder

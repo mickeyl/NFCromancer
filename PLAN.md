@@ -4,8 +4,8 @@
 > The scaffold serves the socket on SimBridgeKit; the ACR122U passthrough
 > reads Type 2 NDEF (a real 2-record NTAG end to end) and round-trips raw
 > APDUs to ISO7816/storage cards. Card classification is fixed (full-ATR
-> template match). Logging goes through CornucopiaCore. Mock mode (phase 2)
-> and client fixtures (phase 3) are next.
+> template match). Logging goes through CornucopiaCore. Mock mode (phase 2, a virtual tag library presented on demand) is done
+> too; client fixtures (phase 3) are next.
 
 **Use real NFC hardware from the iOS Simulator.**
 

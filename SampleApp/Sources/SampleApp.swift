@@ -91,13 +91,35 @@ final class NFCScanner: NSObject, ObservableObject, NFCNDEFReaderSessionDelegate
     nonisolated func readerSession(_ session: NFCNDEFReaderSession, didDetectNDEFs messages: [NFCNDEFMessage]) {
         let records = messages.flatMap { $0.records }.map { record -> NDEFRecord in
             let typeString = String(data: record.type, encoding: .utf8) ?? record.type.map { String(format: "%02X", $0) }.joined()
-            let payloadText = String(data: record.payload, encoding: .utf8) ?? "\(record.payload.count) bytes"
-            return NDEFRecord(title: "TNF \(record.typeNameFormat.rawValue) · \(typeString)", detail: payloadText)
+            // Well-known records carry structured payloads: a Text record
+            // prefixes a status byte + language code, a URI record an
+            // abbreviation byte. Use CoreNFC's decoders rather than reading the
+            // raw payload as a string (which would surface the "en" prefix).
+            let detail: String
+            if let uri = record.wellKnownTypeURIPayload() {
+                detail = uri.absoluteString
+            } else if let (text, locale) = textPayload(record) {
+                detail = "\(text)  [\(locale?.identifier ?? "?")]"
+            } else {
+                detail = String(data: record.payload, encoding: .utf8) ?? "\(record.payload.count) bytes"
+            }
+            return NDEFRecord(title: "TNF \(record.typeNameFormat.rawValue) · \(typeString)", detail: detail)
         }
         Task { @MainActor in
             self.ndefRecords = records
             self.status = "Read \(records.count) NDEF record(s)"
         }
+    }
+
+    private nonisolated func textPayload(_ record: NFCNDEFPayload) -> (String, Locale?)? {
+        guard record.typeNameFormat == .nfcWellKnown, record.type == Data("T".utf8),
+              let status = record.payload.first else { return nil }
+        let langLen = Int(status & 0x3F)
+        let bytes = record.payload.dropFirst(1)
+        guard bytes.count >= langLen else { return nil }
+        let lang = String(data: bytes.prefix(langLen), encoding: .utf8)
+        let text = String(data: bytes.dropFirst(langLen), encoding: .utf8) ?? ""
+        return (text, lang.map(Locale.init(identifier:)))
     }
 
     nonisolated func readerSession(_ session: NFCNDEFReaderSession, didInvalidateWithError error: Error) {
