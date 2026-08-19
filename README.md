@@ -26,7 +26,10 @@ app once released.
 > swizzles `readingAvailable` to reflect provider connectivity, and the menu
 > bar provider serves the socket with the shared transport. Passthrough
 > (ACR122U via CryptoTokenKit), a mock tag library, and client-supplied
-> fixtures all work. The library also imitates the iOS "Ready to Scan" system
+> fixtures all work. A card resting on the reader can be copied into the mock
+> library, and a mock tag can be written back onto a physical Type 2 tag
+> (NTAG/Ultralight) — read in, write out. The library also imitates the iOS
+> "Ready to Scan" system
 > sheet automatically while a session is active — the Simulator shows nothing
 > otherwise. See [PLAN.md](PLAN.md).
 

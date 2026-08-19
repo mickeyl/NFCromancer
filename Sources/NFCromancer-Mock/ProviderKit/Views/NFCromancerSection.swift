@@ -286,6 +286,72 @@ public struct NFCromancerSection: View {
               : "This card exposes no NDEF; only its UID is captured (a blank tag).")
     }
 
+    /// A mock tag chosen from the write menu, awaiting the overwrite
+    /// confirmation; and the result of the last write, shown inline.
+    @State private var pendingWrite: MockTag?
+    @State private var writeStatus: WriteStatus = .idle
+
+    private enum WriteStatus: Equatable {
+        case idle, writing, success, failure(String)
+    }
+
+    @ViewBuilder
+    private func writeControl(_ tag: PresentedTag) -> some View {
+        VStack(spacing: 4) {
+            Menu {
+                if store.tags.isEmpty {
+                    Text("No mock tags to write")
+                } else {
+                    ForEach(store.tags) { t in
+                        Button(t.name) { pendingWrite = t }
+                    }
+                }
+            } label: {
+                Label("Write Mock Tag…", systemImage: "square.and.arrow.up")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .controlSize(.small)
+            .disabled(store.tags.isEmpty || writeStatus == .writing)
+
+            switch writeStatus {
+                case .idle:
+                    EmptyView()
+                case .writing:
+                    Label("Writing…", systemImage: "square.and.arrow.up")
+                        .font(.caption).foregroundStyle(.secondary)
+                case .success:
+                    Label("Written to card", systemImage: "checkmark")
+                        .font(.caption).foregroundStyle(.green)
+                case .failure(let message):
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+            }
+        }
+        .confirmationDialog(
+            pendingWrite.map { "Write “\($0.name)” to the tag on the reader?" } ?? "",
+            isPresented: Binding(get: { pendingWrite != nil }, set: { if !$0 { pendingWrite = nil } }),
+            presenting: pendingWrite
+        ) { mock in
+            Button("Write", role: .destructive) { performWrite(mock) }
+            Button("Cancel", role: .cancel) { pendingWrite = nil }
+        } message: { _ in
+            Text("This overwrites the tag's current NDEF content. Type 2 tags only.")
+        }
+    }
+
+    private func performWrite(_ tag: MockTag) {
+        pendingWrite = nil
+        writeStatus = .writing
+        server.writeToReader(tag) { result in
+            switch result {
+                case .success:            writeStatus = .success
+                case .failure(let error): writeStatus = .failure(error.localizedDescription)
+            }
+        }
+    }
+
     @ViewBuilder
     private var passthroughBody: some View {
         VStack(spacing: 14) {
@@ -310,6 +376,9 @@ public struct NFCromancerSection: View {
                     }
                 }
                 captureButton(tag)
+                if tag.isType2 {
+                    writeControl(tag)
+                }
             } else if server.readerAvailable {
                 Image(systemName: "wave.3.right.circle")
                     .font(.system(size: 40))
@@ -337,6 +406,10 @@ public struct NFCromancerSection: View {
             Spacer(minLength: 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // A different card (or an empty field) invalidates the last write result.
+        .onChange(of: server.presentedTag?.uidHex) { _, _ in
+            writeStatus = .idle
+        }
     }
 
     private func placeholderBody(systemImage: String, message: String) -> some View {

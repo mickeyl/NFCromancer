@@ -130,6 +130,56 @@ public final class TagServer: ObservableObject {
         transport.note("Presented '\(tag.name)'")
     }
 
+    /// Reasons a host-side write can't proceed, surfaced to the panel.
+    public enum WriteRefused: LocalizedError {
+        case noWritableCard
+        case noNDEF
+
+        public var errorDescription: String? {
+            switch self {
+                case .noWritableCard: "Place a writable Type 2 tag (NTAG/Ultralight) on the reader first."
+                case .noNDEF:         "This mock tag carries no NDEF message to write."
+            }
+        }
+    }
+
+    /// Write a mock tag's NDEF onto the Type 2 card resting on the reader — the
+    /// write-out counterpart to copying a card in. Completion is delivered on
+    /// the main thread for the panel.
+    public func writeToReader(_ tag: MockTag, completion: @escaping (Result<Void, Error>) -> Void) {
+        transport.performOnIOQueue { [weak self] in
+            guard let self else { return }
+            let finish: (Result<Void, Error>) -> Void = { result in
+                DispatchQueue.main.async { completion(result) }
+            }
+            guard let reading = self.pendingReaderTag, reading.tech == .type2 else {
+                finish(.failure(WriteRefused.noWritableCard))
+                return
+            }
+            guard let message = tag.ndefMessage, !message.isEmpty else {
+                finish(.failure(WriteRefused.noNDEF))
+                return
+            }
+            self.transport.note("Writing '\(tag.name)' to card…")
+            self.reader.writeType2NDEF(message) { [weak self] result in
+                finish(result)
+                self?.transport.performOnIOQueue {
+                    guard let self else { return }
+                    switch result {
+                        case .success:
+                            self.transport.note("Wrote '\(tag.name)' to card")
+                            // Reflect the freshly written content in the panel so
+                            // the card now reads back what was just burned in.
+                            self.pendingReaderTag?.ndef = message
+                            if let updated = self.pendingReaderTag { self.publishPresentedTag(updated) }
+                        case .failure(let error):
+                            self.transport.note("Write failed: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
     /// Remove the presented mock tag from the field.
     public func retract() {
         transport.performOnIOQueue { [weak self] in self?.retractMockTag() }
@@ -353,6 +403,7 @@ public final class TagServer: ObservableObject {
             uid: tag.uid.map { String(format: "%02X", $0) }.joined(separator: " "),
             uidHex: tag.uid.map { String(format: "%02x", $0) }.joined(),
             tech: tag.tech == .iso7816 ? "ISO7816 (ISO-DEP)" : "Type 2 (NTAG/Ultralight)",
+            isType2: tag.tech == .type2,
             hasNDEF: ndef != nil,
             ndef: ndef
         )
@@ -371,6 +422,8 @@ public struct PresentedTag: Equatable {
     /// UID as compact lowercase hex, the form a captured mock stores.
     public let uidHex: String
     public let tech: String
+    /// True for Type 2 (NTAG/Ultralight) — the technology v1 can write.
+    public let isType2: Bool
     public let hasNDEF: Bool
     /// The NDEF message read on arrival, for snapshotting into the library.
     public let ndef: Data?

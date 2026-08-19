@@ -2,6 +2,11 @@ import Foundation
 import CryptoTokenKit
 import CornucopiaCore
 
+/// The reader lost its card between an operation being requested and run.
+struct NoCard: LocalizedError {
+    var errorDescription: String? { "No card on the reader." }
+}
+
 /// A tag seen on the reader, resolved far enough to hand to a session.
 struct ReaderTag {
     enum Tech {
@@ -164,6 +169,23 @@ final class ReaderSource {
     private func readUID(card: TKSmartCard, completion: @escaping (Data) -> Void) {
         transmit(card: card, apdu: Self.getUID) { data, sw1, sw2 in
             completion((sw1 == 0x90 && sw2 == 0x00) ? data : Data())
+        }
+    }
+
+    /// Writes an NDEF message onto the Type 2 card currently in the field.
+    /// Callback on the queue.
+    func writeType2NDEF(_ message: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        queue.async { [self] in
+            guard let card else {
+                completion(.failure(NoCard()))
+                return
+            }
+            NDEFWriter.writeType2(
+                message: message,
+                transmit: { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
+            ) { result in
+                self.queue.async { completion(result) }
+            }
         }
     }
 
