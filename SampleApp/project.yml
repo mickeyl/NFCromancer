@@ -12,11 +12,17 @@ targets:
     sources: [Sources]
     dependencies:
       - package: NFCromancer
+    entitlements:
+      path: SampleApp.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.vanille.nfcromancer-sample
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NFCReaderUsageDescription: "Scan NFC tags to read their content."
+        # Set your Apple Developer team here (or pick it in Xcode's
+        # Signing & Capabilities with Automatically manage signing):
+        # DEVELOPMENT_TEAM: XXXXXXXXXX
   SampleAppTests:
     type: bundle.unit-test
     platform: iOS
