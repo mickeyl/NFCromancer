@@ -55,10 +55,7 @@ public struct NFCromancerSection: View {
                         message: "Mock tags arrive in phase 2 — the provider is listening, but has nothing to present yet."
                     )
                 case .passthrough:
-                    placeholderBody(
-                        systemImage: "wave.3.right.circle",
-                        message: "ACR122U passthrough arrives in phase 1 — the provider is listening, but the reader is not wired up yet."
-                    )
+                    passthroughBody
             }
         }
     }
@@ -139,6 +136,58 @@ public struct NFCromancerSection: View {
                 Text("Simulator apps see no NFC.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var passthroughBody: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 16)
+            if let tag = server.presentedTag {
+                Image(systemName: "wave.3.right.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.green)
+                VStack(spacing: 4) {
+                    Text("Tag on reader")
+                        .font(.headline)
+                    Text(tag.tech)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Text("UID \(tag.uid)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    if tag.hasNDEF {
+                        Label("NDEF present", systemImage: "doc.text")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+            } else if server.readerAvailable {
+                Image(systemName: "wave.3.right.circle")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                VStack(spacing: 4) {
+                    Text("Reader ready")
+                        .font(.headline)
+                    Text("Present a tag on the reader.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Image(systemName: "wave.3.right.slash")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.orange.opacity(0.7))
+                VStack(spacing: 4) {
+                    Text("No reader")
+                        .font(.headline)
+                    Text("Connect a USB NFC reader (ACR122U).")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             Spacer(minLength: 16)
         }

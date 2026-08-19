@@ -13,6 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/mickeyl/SimBridgeKit.git", from: "0.1.2"),
+        .package(url: "https://github.com/Cornucopia-Swift/CornucopiaCore", branch: "master"),
     ],
     targets: [
         .target(
@@ -20,6 +21,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SimBridgeServer", package: "SimBridgeKit"),
                 .product(name: "SimBridgeShell", package: "SimBridgeKit"),
+                .product(name: "CornucopiaCore", package: "CornucopiaCore"),
             ],
             path: "ProviderKit"
         ),
