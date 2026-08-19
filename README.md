@@ -22,7 +22,7 @@ under test. Built on
 embeddable in the [Simsalabim](https://github.com/mickeyl/Simsalabim) suite
 app once released.
 
-> **Status: 0.1.0-dev, phase 0.** The scaffold is functional: the library
+> **Status: 0.1.0.** The library
 > swizzles `readingAvailable` to reflect provider connectivity, and the menu
 > bar provider serves the socket with the shared transport. Passthrough
 > (ACR122U via CryptoTokenKit), a mock tag library, and client-supplied
