@@ -55,7 +55,7 @@ public final class TagServer: ObservableObject {
     public init() {
         transport = ProtocolServer(
             socketPath: kSocketPath,
-            name: "NFCromancer-Mock",
+            name: "NFCromancer-Mac",
             appVersion: AppVersion.current
         )
         transport.onMessage = { [weak self] message in

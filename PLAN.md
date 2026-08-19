@@ -86,7 +86,7 @@ The established two-process shape, third edition:
 ```
 ┌──────────────────────────────┐          ┌──────────────────────────────────┐
 │ iOS Simulator app            │  NDJSON  │ macOS host                       │
-│  CoreNFC surface             │ control  │  NFCromancer-Mock.app            │
+│  CoreNFC surface             │ control  │  NFCromancer-Mac.app            │
 │  ── swizzled at +load ──►    ◄──────────►  ProtocolServer (SimBridgeKit)   │
 │  NFRActivator                │ /tmp/    │  Mock: virtual tag library       │
 │  NFRConnection (CBS port)    │ nfcroman │  Passthrough: ACR122U via        │
@@ -99,9 +99,9 @@ The established two-process shape, third edition:
   NDJSON over `/tmp/nfcromancer.sock`, lazy connect on first session
   creation, device builds compile to no-ops. `NFRConnection` is the
   `CBSConnection` port (hello handshake included).
-- **Provider** (`Sources/NFCromancer-Mock`, nested package): the directory
+- **Provider** (`Sources/NFCromancer-Mac`, nested package): the directory
   name is product-specific from day one (SPM identity lesson), with
-  `NFCromancerProviderKit` (library) + thin `NFCromancer-Mock` executable —
+  `NFCromancerProviderKit` (library) + thin `NFCromancer-Mac` executable —
   the Step-3 shape the suite consumes. Transport and shell from SimBridgeKit.
 
 ### The pleasant surprise: almost no proxy shims
@@ -201,11 +201,11 @@ XCTest can upload an NDEF fixture, present it programmatically, and assert
 ```
 NFCromancer/
 ├── Package.swift               # simulator library, iOS 14+, links CoreNFC
-├── Makefile                    # ImpossiBLE Makefile ported (mock-* targets)
+├── Makefile                    # ImpossiBLE Makefile ported (mac-* targets)
 ├── PLAN.md / README.md / AGENTS.md / LICENSE (MIT)
 ├── Sources/
 │   ├── NFCromancer/            # simulator-side ObjC library (NFR prefix)
-│   └── NFCromancer-Mock/       # nested package: ProviderKit/ + App/
+│   └── NFCromancer-Mac/       # nested package: ProviderKit/ + App/
 └── SampleApp/                  # xcodegen; NDEF scanner + APDU console
 ```
 
@@ -232,7 +232,7 @@ NFCromancer/
 | Risk | Mitigation |
 |---|---|
 | CoreNFC simulator stubs behave unexpectedly when swizzled (sessions may assert internally) | Phase 0 smoke test instantiates every swizzled class on the simulator before deeper work |
-| `TKSmartCardSlotManager` under the Hardened Runtime | entitlement verified unsigned+ad-hoc (§0); release build assessed via `make mock-assess` before tagging |
+| `TKSmartCardSlotManager` under the Hardened Runtime | entitlement verified unsigned+ad-hoc (§0); release build assessed via `make mac-assess` before tagging |
 | ACR122U firmware quirks (mute cards, sleep re-enumeration) | robustness notes in §3; treat every transmit as fallible; re-observe slot names |
 | Session/tag lifetime races (tag pulled during APDU) | tag generation counter, the ImpossiBLE takeover/teardown discipline via SimBridgeKit |
 | Apps gate on `NFCReaderUsageDescription` / entitlement checks client-side | none needed in the simulator; document that device builds keep their real requirements |

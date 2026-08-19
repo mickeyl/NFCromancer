@@ -4,7 +4,7 @@ import NFCromancerProviderKit
 import SimBridgeShell
 
 @MainActor
-private final class MockAppRuntime {
+private final class MacAppRuntime {
     let server: TagServer
     let statusBar: StatusBarController
 
@@ -16,10 +16,10 @@ private final class MockAppRuntime {
 
 /// Shuts the socket server down before the process exits so the socket file is
 /// unlinked cleanly. Handles every quit path (footer button and ⌘Q).
-final class MockAppDelegate: NSObject, NSApplicationDelegate {
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let server = MockApp.retainedRuntime?.server else {
+        guard let server = MacApp.retainedRuntime?.server else {
             return .terminateNow
         }
 
@@ -31,14 +31,14 @@ final class MockAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct MockApp: App {
-    fileprivate static var retainedRuntime: MockAppRuntime?
+struct MacApp: App {
+    fileprivate static var retainedRuntime: MacAppRuntime?
 
-    @NSApplicationDelegateAdaptor(MockAppDelegate.self) private var appDelegate
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
 
     init() {
         if Self.retainedRuntime == nil {
-            Self.retainedRuntime = MockAppRuntime()
+            Self.retainedRuntime = MacAppRuntime()
         }
         NSApplication.shared.setActivationPolicy(.accessory)
     }

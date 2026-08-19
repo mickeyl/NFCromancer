@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "NFCromancer-Mock",
+    name: "NFCromancer-Mac",
     platforms: [.macOS("15.0")],
     products: [
         // The host-side provider as a library, so the Simsalabim suite app can
         // embed it alongside other providers. The standalone menu bar app is a
         // thin wrapper around the same target.
         .library(name: "NFCromancerProviderKit", targets: ["NFCromancerProviderKit"]),
-        .executable(name: "NFCromancer-Mock", targets: ["NFCromancer-Mock"]),
+        .executable(name: "NFCromancer-Mac", targets: ["NFCromancer-Mac"]),
     ],
     dependencies: [
         .package(url: "https://github.com/mickeyl/SimBridgeKit.git", from: "0.1.2"),
@@ -26,7 +26,7 @@ let package = Package(
             path: "ProviderKit"
         ),
         .executableTarget(
-            name: "NFCromancer-Mock",
+            name: "NFCromancer-Mac",
             dependencies: [
                 "NFCromancerProviderKit",
                 .product(name: "SimBridgeServer", package: "SimBridgeKit"),

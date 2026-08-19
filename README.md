@@ -36,8 +36,8 @@ app once released.
 ## Quick Start
 
 ```bash
-# Build and start the mock menu bar app, then pick a mode in its panel
-make mock-run
+# Build and start the Mac menu bar app, then pick a mode in its panel
+make mac-run
 
 # In Xcode: add NFCromancer as a local Swift package dependency,
 # then build and run your app in the iOS Simulator.
@@ -53,7 +53,7 @@ make mock-run
 | Path | Contents |
 |---|---|
 | `Sources/NFCromancer` | Simulator-side library (Objective-C, `NFR` prefix) |
-| `Sources/NFCromancer-Mock` | Provider: `NFCromancerProviderKit` + thin menu bar app |
+| `Sources/NFCromancer-Mac` | Provider: `NFCromancerProviderKit` + thin menu bar app |
 | `PLAN.md` | Full roadmap, verified hardware facts, per-phase status |
 | `AGENTS.md` | Architecture invariants, wire protocol, validation recipe |
 

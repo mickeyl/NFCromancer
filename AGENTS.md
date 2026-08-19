@@ -10,17 +10,18 @@
   `readingAvailable` on both session classes, answering with provider
   connectivity (the connection opens lazily on the first query). Device
   builds compile to no-ops.
-- `Sources/NFCromancer-Mock` is the nested provider package —
+- `Sources/NFCromancer-Mac` is the nested provider package —
   **product-specific directory name** (SPM identity comes from the basename;
-  two `MockApp` directories cannot coexist in the suite's graph). Two
+  product-specific so the three providers' packages don't collide in the
+  suite's graph). Two
   targets: `NFCromancerProviderKit` (library: `TagServer` domain layer,
-  `NFCromancerSection`/`MenuContent` views) and the thin `NFCromancer-Mock`
+  `NFCromancerSection`/`MenuContent` views) and the thin `NFCromancer-Mac`
   executable (app lifecycle + shell wiring). Transport and menu bar shell
   come from SimBridgeKit (`ProtocolServer`, `StatusItemPanelController`,
   `ModeTransitionController`); see that repo's AGENTS.md for the socket
   discipline, takeover semantics, and ownership guard.
 - Socket: `/tmp/nfcromancer.sock`. Persisted mode key: `ProviderMode` in
-  `de.vanille.nfcromancer-mock`.
+  `de.vanille.nfcromancer-mac`.
 - Wire protocol beyond the kit's hello/takeover: see PLAN.md §2 —
   `beginSession`/`endSession`/`connectTag`/`sendAPDU` client→provider,
   `tagDetected`/`tagRemoved`/`apduResponse`/`sessionInvalidated`
@@ -104,7 +105,7 @@
 - `SampleApp/Tests/NFCromancerFixtureTests` is the end-to-end proof: upload a
   URI fixture, begin a real NFCNDEFReaderSession, present it, assert the
   delegate's `wellKnownTypeURIPayload()`. Runs headless against a provider in
-  Mock mode — `make mock` then the SampleAppTests scheme.
+  Mock mode — `make mac` then the SampleAppTests scheme.
 
 ## Scan sheet imitation
 
@@ -120,10 +121,10 @@ thread via a dedicated UIWindow above the alert level.
 ## Logging
 
 Provider logging is `Cornucopia.Core.Logger` (see the logging directive). To
-see output from a **release** build (`make mock` is release), pass both env
+see output from a **release** build (`make mac` is release), pass both env
 vars: `LOGLEVEL=TRACE LOGSINK=print://`. `LOGLEVEL` alone is not enough — the
 logger's default sink is nil in release (PrintLogger only in DEBUG builds), so
-`make mock-debug` shows logs without a LOGSINK but `make mock` does not.
+`make mac-debug` shows logs without a LOGSINK but `make mac` does not.
 Output goes to stderr as `[subsystem:category] <thread> (LEVEL) message`.
 
 ## Build And Verification
@@ -131,9 +132,9 @@ Output goes to stderr as `[subsystem:category] <thread> (LEVEL) message`.
 ```bash
 xcodebuild -scheme NFCromancer -destination 'generic/platform=iOS Simulator' build
 xcodebuild -scheme NFCromancer -destination 'generic/platform=iOS' build
-cd Sources/NFCromancer-Mock && swift build   # standalone SPM check
-make mock-clean mock
-plutil -lint Sources/NFCromancer-Mock/Resources/Info.plist Sources/NFCromancer-Mock/Resources/entitlements.plist
+cd Sources/NFCromancer-Mac && swift build   # standalone SPM check
+make mac-clean mac
+plutil -lint Sources/NFCromancer-Mac/Resources/Info.plist Sources/NFCromancer-Mac/Resources/entitlements.plist
 ```
 
 ## Release Checklist
@@ -141,5 +142,5 @@ plutil -lint Sources/NFCromancer-Mock/Resources/Info.plist Sources/NFCromancer-M
 Bump the version in **three** places and keep them identical:
 `kNFRLibraryVersion` in `Sources/NFCromancer/NFRConnection.m`,
 `AppVersion.current` in
-`Sources/NFCromancer-Mock/ProviderKit/Models/AppVersion.swift`, and
-`CFBundleShortVersionString` in `Sources/NFCromancer-Mock/Resources/Info.plist`.
+`Sources/NFCromancer-Mac/ProviderKit/Models/AppVersion.swift`, and
+`CFBundleShortVersionString` in `Sources/NFCromancer-Mac/Resources/Info.plist`.

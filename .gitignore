@@ -2,7 +2,7 @@
 .swiftpm/
 *.app
 *.dSYM
-NFCromancer-Mock.zip
+NFCromancer-Mac.zip
 .DS_Store
 xcuserdata/
 SampleApp.xcodeproj
