@@ -4,15 +4,20 @@
 
 #import <UIKit/UIKit.h>
 
-// A bottom card echoing the iOS "Ready to Scan" sheet: a pulsing NFC glyph, a
-// message line, and a Cancel button, over a dimmed backdrop. Deliberately not
-// pixel-identical to any one iOS version — recognizable, not a forgery.
+// Imitates the iOS system "Ready to Scan" sheet: a bottom sheet anchored to the
+// screen edge (top corners rounded), a large left-aligned title with a close
+// button top-right, a phone-in-a-ring glyph, the app's alertMessage, and a
+// filled blue Cancel pill — over a dimmed backdrop. Matched against a real
+// device screenshot (2026-08-19), not pixel-perfect but faithful.
 @interface NFRScanSheetWindow : UIWindow
 @property(nonatomic, copy) void (^onCancel)(void);
 @property(nonatomic, strong) UILabel *messageLabel;
-@property(nonatomic, strong) UIView *card;
-@property(nonatomic, strong) UIImageView *glyph;
-@property(nonatomic, strong) UIActivityIndicatorView *spinner;
+@property(nonatomic, strong) UIView *sheet;
+@property(nonatomic, strong) UIView *iconContainer;
+@property(nonatomic, strong) CAShapeLayer *ring;
+@property(nonatomic, strong) UIImageView *phone;
+@property(nonatomic, strong) UIImageView *successMark;
+@property(nonatomic, assign) CGFloat sheetHeight;
 @end
 
 @implementation NFRScanSheetWindow
@@ -21,7 +26,7 @@
     self = [super initWithWindowScene:scene];
     if (self) {
         self.windowLevel = UIWindowLevelAlert + 1;
-        self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.0];
+        self.backgroundColor = [UIColor clearColor];
         self.rootViewController = [UIViewController new];
         [self buildContent];
     }
@@ -34,60 +39,101 @@
 
     UIView *dim = [[UIView alloc] initWithFrame:root.bounds];
     dim.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
+    dim.backgroundColor = [UIColor colorWithWhite:0 alpha:0.4];
     [root addSubview:dim];
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(cancelTapped)];
-    [dim addGestureRecognizer:tap];
 
-    CGFloat width = MIN(root.bounds.size.width - 32, 380);
-    CGFloat height = 220;
-    self.card = [[UIView alloc] initWithFrame:CGRectMake((root.bounds.size.width - width) / 2,
-                                                         root.bounds.size.height - height - 40,
-                                                         width, height)];
-    self.card.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-    self.card.backgroundColor = [UIColor secondarySystemBackgroundColor];
-    self.card.layer.cornerRadius = 20;
-    self.card.layer.cornerCurve = kCACornerCurveContinuous;
-    [root addSubview:self.card];
+    CGFloat screenW = root.bounds.size.width;
+    CGFloat screenH = root.bounds.size.height;
+    self.sheetHeight = 430;
+    // Anchored to the bottom, a little overshoot below so the bottom corners
+    // never show. Only the top corners are rounded.
+    self.sheet = [[UIView alloc] initWithFrame:CGRectMake(0, screenH - self.sheetHeight, screenW, self.sheetHeight + 60)];
+    self.sheet.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+    self.sheet.backgroundColor = [UIColor systemBackgroundColor];
+    self.sheet.layer.cornerRadius = 40;
+    self.sheet.layer.cornerCurve = kCACornerCurveContinuous;
+    self.sheet.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    [root addSubview:self.sheet];
 
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(16, 16, width - 32, 24)];
+    CGFloat pad = 24;
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(pad, 28, screenW - pad * 2 - 44, 42)];
     title.text = @"Ready to Scan";
-    title.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    title.font = [UIFont systemFontOfSize:34 weight:UIFontWeightBold];
     title.textColor = [UIColor labelColor];
-    title.textAlignment = NSTextAlignmentCenter;
-    [self.card addSubview:title];
+    title.textAlignment = NSTextAlignmentLeft;
+    [self.sheet addSubview:title];
 
-    UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:52 weight:UIImageSymbolWeightRegular];
-    self.glyph = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"wave.3.right" withConfiguration:cfg]];
-    self.glyph.tintColor = [UIColor systemBlueColor];
-    self.glyph.contentMode = UIViewContentModeScaleAspectFit;
-    self.glyph.frame = CGRectMake((width - 90) / 2, 52, 90, 66);
-    [self.card addSubview:self.glyph];
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
+    close.frame = CGRectMake(screenW - pad - 34, 30, 34, 34);
+    UIImageSymbolConfiguration *xcfg = [UIImageSymbolConfiguration configurationWithPointSize:32 weight:UIImageSymbolWeightRegular];
+    UIImage *x = [UIImage systemImageNamed:@"xmark.circle.fill" withConfiguration:xcfg];
+    [close setImage:x forState:UIControlStateNormal];
+    close.tintColor = [UIColor tertiaryLabelColor];
+    [close addTarget:self action:@selector(cancelTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self.sheet addSubview:close];
+
+    // Phone-in-a-ring glyph, centered.
+    CGFloat ringSize = 170;
+    self.iconContainer = [[UIView alloc] initWithFrame:CGRectMake((screenW - ringSize) / 2, 108, ringSize, ringSize)];
+    [self.sheet addSubview:self.iconContainer];
+
+    self.ring = [CAShapeLayer layer];
+    CGFloat inset = 4;
+    self.ring.path = [UIBezierPath bezierPathWithOvalInRect:CGRectInset(self.iconContainer.bounds, inset, inset)].CGPath;
+    self.ring.strokeColor = [UIColor systemBlueColor].CGColor;
+    self.ring.fillColor = [UIColor clearColor].CGColor;
+    self.ring.lineWidth = 8;
+    [self.iconContainer.layer addSublayer:self.ring];
+
+    UIImageSymbolConfiguration *pcfg = [UIImageSymbolConfiguration configurationWithPointSize:84 weight:UIImageSymbolWeightRegular];
+    self.phone = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"iphone.gen3" withConfiguration:pcfg]];
+    if (!self.phone.image) {
+        self.phone.image = [UIImage systemImageNamed:@"iphone" withConfiguration:pcfg];
+    }
+    self.phone.tintColor = [UIColor colorWithRed:0.79 green:0.87 blue:0.99 alpha:1.0];
+    self.phone.contentMode = UIViewContentModeScaleAspectFit;
+    self.phone.frame = CGRectMake((ringSize - 84) / 2, (ringSize - 104) / 2, 84, 104);
+    [self.iconContainer addSubview:self.phone];
     [self startPulse];
 
-    self.messageLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 126, width - 32, 36)];
-    self.messageLabel.font = [UIFont systemFontOfSize:14];
+    // Success checkmark, hidden until a tag is read.
+    UIImageSymbolConfiguration *scfg = [UIImageSymbolConfiguration configurationWithPointSize:120 weight:UIImageSymbolWeightRegular];
+    self.successMark = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark.circle.fill" withConfiguration:scfg]];
+    self.successMark.tintColor = [UIColor systemGreenColor];
+    self.successMark.contentMode = UIViewContentModeScaleAspectFit;
+    self.successMark.frame = self.iconContainer.bounds;
+    self.successMark.hidden = YES;
+    [self.iconContainer addSubview:self.successMark];
+
+    self.messageLabel = [[UILabel alloc] initWithFrame:CGRectMake(pad, 292, screenW - pad * 2, 44)];
+    self.messageLabel.font = [UIFont systemFontOfSize:16];
     self.messageLabel.textColor = [UIColor secondaryLabelColor];
     self.messageLabel.textAlignment = NSTextAlignmentCenter;
     self.messageLabel.numberOfLines = 2;
-    [self.card addSubview:self.messageLabel];
+    [self.sheet addSubview:self.messageLabel];
 
     UIButton *cancel = [UIButton buttonWithType:UIButtonTypeSystem];
-    cancel.frame = CGRectMake(16, height - 52, width - 32, 40);
+    cancel.frame = CGRectMake(20, self.sheetHeight - 54 - 34, screenW - 40, 54);
+    cancel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+    cancel.backgroundColor = [UIColor systemBlueColor];
+    cancel.layer.cornerRadius = 27;
+    cancel.layer.cornerCurve = kCACornerCurveContinuous;
     [cancel setTitle:@"Cancel" forState:UIControlStateNormal];
-    cancel.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
+    [cancel setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    cancel.titleLabel.font = [UIFont systemFontOfSize:18 weight:UIFontWeightSemibold];
     [cancel addTarget:self action:@selector(cancelTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self.card addSubview:cancel];
+    [self.sheet addSubview:cancel];
 }
 
 - (void)startPulse {
     CABasicAnimation *pulse = [CABasicAnimation animationWithKeyPath:@"opacity"];
     pulse.fromValue = @1.0;
-    pulse.toValue = @0.35;
-    pulse.duration = 0.8;
+    pulse.toValue = @0.4;
+    pulse.duration = 0.9;
     pulse.autoreverses = YES;
     pulse.repeatCount = HUGE_VALF;
-    [self.glyph.layer addAnimation:pulse forKey:@"pulse"];
+    [self.phone.layer addAnimation:pulse forKey:@"pulse"];
 }
 
 - (void)cancelTapped {
@@ -96,10 +142,10 @@
 }
 
 - (void)showSuccessWithMessage:(NSString *)message {
-    UIImageConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:52 weight:UIImageSymbolWeightRegular];
-    [self.glyph.layer removeAllAnimations];
-    self.glyph.image = [UIImage systemImageNamed:@"checkmark.circle.fill" withConfiguration:cfg];
-    self.glyph.tintColor = [UIColor systemGreenColor];
+    [self.phone.layer removeAllAnimations];
+    self.phone.hidden = YES;
+    self.ring.hidden = YES;
+    self.successMark.hidden = NO;
     if (message) self.messageLabel.text = message;
 }
 
@@ -116,7 +162,6 @@ static NFRScanSheetWindow *gWindow;
             return (UIWindowScene *)scene;
         }
     }
-    // Fall back to any window scene if none is foreground-active yet.
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if ([scene isKindOfClass:[UIWindowScene class]]) {
             return (UIWindowScene *)scene;
@@ -135,16 +180,17 @@ static NFRScanSheetWindow *gWindow;
 
     NFRScanSheetWindow *window = [[NFRScanSheetWindow alloc] initWithScene:scene];
     window.onCancel = onCancel;
-    window.messageLabel.text = message ?: @"Hold your device near an NFC tag.";
+    window.messageLabel.text = message ?: @"";
     window.hidden = NO;
 
-    // Slide the card up from below.
-    CGRect finalFrame = window.card.frame;
-    window.card.frame = CGRectOffset(finalFrame, 0, finalFrame.size.height + 60);
-    window.alpha = 0;
-    [UIView animateWithDuration:0.28 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
-        window.alpha = 1;
-        window.card.frame = finalFrame;
+    CGRect finalFrame = window.sheet.frame;
+    window.sheet.frame = CGRectOffset(finalFrame, 0, window.sheetHeight + 60);
+    UIView *dim = window.rootViewController.view.subviews.firstObject;
+    dim.alpha = 0;
+    [UIView animateWithDuration:0.30 delay:0 usingSpringWithDamping:0.9 initialSpringVelocity:0.4
+                        options:UIViewAnimationOptionCurveEaseOut animations:^{
+        dim.alpha = 1;
+        window.sheet.frame = finalFrame;
     } completion:nil];
 
     gWindow = window;
@@ -158,7 +204,7 @@ static NFRScanSheetWindow *gWindow;
 + (void)dismissWithSuccess:(NSString *)message {
     if (!gWindow) return;
     [gWindow showSuccessWithMessage:message];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self dismiss];
     });
 }
@@ -167,9 +213,10 @@ static NFRScanSheetWindow *gWindow;
     NFRScanSheetWindow *window = gWindow;
     if (!window) return;
     gWindow = nil;
-    [UIView animateWithDuration:0.22 animations:^{
-        window.alpha = 0;
-        window.card.frame = CGRectOffset(window.card.frame, 0, window.card.frame.size.height + 60);
+    UIView *dim = window.rootViewController.view.subviews.firstObject;
+    [UIView animateWithDuration:0.25 animations:^{
+        dim.alpha = 0;
+        window.sheet.frame = CGRectOffset(window.sheet.frame, 0, window.sheetHeight + 60);
     } completion:^(BOOL finished) {
         window.hidden = YES;
     }];
