@@ -10,8 +10,9 @@ enum NDEFReader {
 
     static func read(tech: ReaderTag.Tech, transmit: @escaping Transmit, completion: @escaping (Data?) -> Void) {
         switch tech {
-            case .type2:   readType2(transmit: transmit, completion: completion)
-            case .iso7816: readType4(transmit: transmit, completion: completion)
+            case .type2:         readType2(transmit: transmit, completion: completion)
+            case .iso7816:       readType4(transmit: transmit, completion: completion)
+            case .mifareClassic: completion(nil)   // needs sector auth first; out of scope
         }
     }
 

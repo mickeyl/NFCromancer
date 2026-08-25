@@ -10,8 +10,17 @@ struct NoCard: LocalizedError {
 /// A tag seen on the reader, resolved far enough to hand to a session.
 struct ReaderTag {
     enum Tech {
-        case type2      // ISO14443-3 storage (NTAG / Ultralight): FF pseudo-APDUs only
-        case iso7816    // ISO14443-4 (ISO-DEP): real APDUs reach the card
+        case type2          // ISO14443-3 storage (NTAG / Ultralight): FF pseudo-APDUs only
+        case mifareClassic  // ISO14443-3 storage that needs sector auth first: UID only, out of v1 scope
+        case iso7816        // ISO14443-4 (ISO-DEP): real APDUs reach the card
+
+        var displayName: String {
+            switch self {
+                case .type2:         "Type 2 (NTAG/Ultralight)"
+                case .mifareClassic: "MIFARE Classic (read-only)"
+                case .iso7816:       "ISO7816 (ISO-DEP)"
+            }
+        }
     }
     let uid: Data
     let tech: Tech
@@ -147,7 +156,7 @@ final class ReaderSource {
         let myGeneration = generation
         let atr = slot.atr?.bytes ?? Data()
         let tech = Self.classify(atr: slot.atr)
-        logger.debug("Card ATR=\(atr.map { String(format: "%02X", $0) }.joined()) hist=\((slot.atr?.historicalBytes ?? Data()).map { String(format: "%02X", $0) }.joined()) → \(tech == .iso7816 ? "ISO7816" : "Type2")")
+        logger.debug("Card ATR=\(atr.map { String(format: "%02X", $0) }.joined()) hist=\((slot.atr?.historicalBytes ?? Data()).map { String(format: "%02X", $0) }.joined()) → \(tech.displayName)")
 
         card.beginSession { [weak self] success, error in
             self?.queue.async {
@@ -254,17 +263,24 @@ final class ReaderSource {
     /// CryptoTokenKit does not reliably parse the historical-byte field out of
     /// these PICC ATRs (verified against a live NTAG, ATR
     /// `3B8F8001804F0CA0000003060300030000000068`), so we locate the template
-    /// directly. `NN NN` is the card name — 0003 = Ultralight/NTAG,
-    /// 0001/0002 = MIFARE Classic (readable only after sector auth, out of
-    /// v1 scope), etc.; all are Type 2 for our purposes.
+    /// directly. `NN NN` is the card name — 0003 = Ultralight/NTAG (real Type
+    /// 2: writable via `FF D6` with no auth), 0001/0002 = MIFARE Classic
+    /// (needs a sector `FF 86`/`FF 82` key auth before any read/write beyond
+    /// the UID — out of v1 scope, so kept as its own, non-writable tech
+    /// rather than lumped in with real Type 2: `FF D6` against it always
+    /// fails with SW 6300, on every page, regardless of content).
     private static func classify(atr: TKSmartCardATR?) -> ReaderTag.Tech {
         guard let atr else { return .iso7816 }
         let bytes = [UInt8](atr.bytes)
         let template: [UInt8] = [0xA0, 0x00, 0x00, 0x03, 0x06]
-        let found = bytes.indices.contains { i in
-            i + template.count <= bytes.count && Array(bytes[i..<i+template.count]) == template
-        }
-        return found ? .type2 : .iso7816
+        guard let i = bytes.indices.first(where: { i in
+            i + template.count + 3 <= bytes.count && Array(bytes[i..<i+template.count]) == template
+        }) else { return .iso7816 }
+        // One storage-size byte (SS) sits between the template and NN NN —
+        // skipping it was exactly the bug that let every card, MIFARE
+        // Classic included, read back as Type 2.
+        let cardName = (UInt16(bytes[i + template.count + 1]) << 8) | UInt16(bytes[i + template.count + 2])
+        return (cardName == 0x0001 || cardName == 0x0002) ? .mifareClassic : .type2
     }
 
     // MARK: - Callbacks (queue → caller)

@@ -359,7 +359,7 @@ public final class TagServer: ObservableObject {
         if sessionId != nil {
             deliver(tag)
         } else {
-            transport.note("Tag on reader — \(tag.tech == .iso7816 ? "ISO7816" : "Type 2"), no session yet")
+            transport.note("Tag on reader — \(tag.tech.displayName), no session yet")
         }
     }
 
@@ -402,7 +402,7 @@ public final class TagServer: ObservableObject {
         let presented = PresentedTag(
             uid: tag.uid.map { String(format: "%02X", $0) }.joined(separator: " "),
             uidHex: tag.uid.map { String(format: "%02x", $0) }.joined(),
-            tech: tag.tech == .iso7816 ? "ISO7816 (ISO-DEP)" : "Type 2 (NTAG/Ultralight)",
+            tech: tag.tech.displayName,
             isType2: tag.tech == .type2,
             hasNDEF: ndef != nil,
             ndef: ndef,

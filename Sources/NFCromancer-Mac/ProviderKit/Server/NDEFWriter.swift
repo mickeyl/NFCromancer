@@ -13,6 +13,7 @@ enum NDEFWriter {
     enum WriteError: LocalizedError {
         case writeFailed(page: Int, sw1: UInt8, sw2: UInt8)
         case tooLarge
+        case locked
 
         var errorDescription: String? {
             switch self {
@@ -20,6 +21,8 @@ enum NDEFWriter {
                     "Write failed at page \(page) (SW \(String(format: "%02X%02X", sw1, sw2))) — the tag may be locked, read-only, or too small."
                 case .tooLarge:
                     "The message is too large for a Type 2 tag."
+                case .locked:
+                    "This tag is write-protected (its capability container marks it read-only)."
             }
         }
     }
@@ -27,6 +30,29 @@ enum NDEFWriter {
     /// Encode `message` into a Type 2 NDEF-message TLV, cap it with the
     /// terminator TLV, pad to the 4-byte page size, and write it from page 4.
     static func writeType2(
+        message: Data,
+        transmit: @escaping Transmit,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        // Page 3 is the Capability Container: [magic, version, MLEN, access].
+        // The access byte's low nibble is the write-access condition — 0x0 is
+        // open, anything else means the tag refuses every write. Checking it
+        // first turns a guaranteed page-4 failure into one precise error
+        // instead of a generic "may be locked" guess after the fact.
+        transmit(Data([0xFF, 0xB0, 0x00, 0x03, 0x04])) { cc, sw1, sw2 in
+            guard sw1 == 0x90, sw2 == 0x00, cc.count == 4 else {
+                completion(.failure(WriteError.writeFailed(page: 3, sw1: sw1, sw2: sw2)))
+                return
+            }
+            guard cc[cc.startIndex + 3] & 0x0F == 0x00 else {
+                completion(.failure(WriteError.locked))
+                return
+            }
+            writePages(message: message, transmit: transmit, completion: completion)
+        }
+    }
+
+    private static func writePages(
         message: Data,
         transmit: @escaping Transmit,
         completion: @escaping (Result<Void, Error>) -> Void

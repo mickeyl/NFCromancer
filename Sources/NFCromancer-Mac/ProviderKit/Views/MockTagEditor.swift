@@ -1,10 +1,10 @@
 import SwiftUI
 import AppKit
-import UniformTypeIdentifiers
 
 /// A minimal editor for a new mock tag. Much shallower than a GATT tree — a
-/// name, a kind, and one value field (a file picker in place of that field
-/// for `.image`, since a base64 blob isn't something to type).
+/// name, a kind, and one value field (a preset grid in place of that field
+/// for `.image`: Type 2 tags hold so little memory that picking a file from
+/// the filesystem would mostly be a way to pick something too big to fit).
 struct MockTagEditor: View {
     let onSave: (MockTag) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -12,9 +12,7 @@ struct MockTagEditor: View {
     @State private var name = ""
     @State private var kind: MockTag.Kind = .uri
     @State private var value = ""
-    @State private var imageData: Data?
-    @State private var imageMimeType = "image/png"
-    @State private var imageFileName = ""
+    @State private var selectedPreset: ImagePreset?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -51,56 +49,61 @@ struct MockTagEditor: View {
         }
         .padding(16)
         .frame(width: 360)
+        .onChange(of: kind) { _, newKind in
+            if newKind == .image, selectedPreset == nil { selectedPreset = ImagePreset.all.first }
+        }
     }
 
     private var canSave: Bool {
-        kind == .image ? imageData != nil : !value.trimmingCharacters(in: .whitespaces).isEmpty
+        kind == .image ? selectedPreset != nil : !value.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func newTag(named name: String) -> MockTag {
-        guard kind == .image, let imageData else {
+        guard kind == .image, let selectedPreset, let data = selectedPreset.pngData else {
             return MockTag(name: name, kind: kind, value: value)
         }
-        return MockTag(name: name, kind: .image, value: imageData.base64EncodedString(), mimeType: imageMimeType)
+        return MockTag(name: name, kind: .image, value: data.base64EncodedString(), mimeType: "image/png")
     }
 
     @ViewBuilder
     private var imagePicker: some View {
-        HStack(spacing: 8) {
-            if let imageData, let preview = NSImage(data: imageData) {
-                Image(nsImage: preview)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+            ForEach(ImagePreset.all) { preset in
+                presetSwatch(preset)
             }
-            Button(imageData == nil ? "Choose Image…" : "Change…") { pickImage() }
-            Spacer()
         }
-        if let imageData {
-            let bytes = imageData.count
-            Text("\(imageFileName) · \(bytes) bytes")
+        if let selectedPreset, let bytes = selectedPreset.pngData?.count {
+            Text("\(selectedPreset.name) · \(bytes) bytes")
                 .font(.caption)
-                .foregroundStyle(bytes > 800 ? .orange : .secondary)
-            if bytes > 800 {
-                Text("Most Type 2 tags hold well under 1 KB — this may not fit.")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
+                .foregroundStyle(.secondary)
         }
     }
 
-    private func pickImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url,
-              let data = try? Data(contentsOf: url) else { return }
-        imageData = data
-        imageFileName = url.lastPathComponent
-        let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
-        imageMimeType = type?.preferredMIMEType ?? "image/png"
+    private func presetSwatch(_ preset: ImagePreset) -> some View {
+        let isSelected = selectedPreset?.id == preset.id
+        return Button {
+            selectedPreset = preset
+        } label: {
+            Group {
+                if let data = preset.pngData, let image = NSImage(data: data) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.none)
+                        .frame(width: 22, height: 22)
+                } else {
+                    Color.clear.frame(width: 22, height: 22)
+                }
+            }
+            .padding(5)
+            .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: isSelected ? 1.5 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(preset.name)
     }
 
     private var valuePrompt: String {
@@ -116,7 +119,7 @@ struct MockTagEditor: View {
         switch kind {
             case .uri:   "URL tag"
             case .text:  "Text tag"
-            case .image: "Image tag"
+            case .image: selectedPreset?.name ?? "Image tag"
             case .raw:   "Raw tag"
         }
     }
