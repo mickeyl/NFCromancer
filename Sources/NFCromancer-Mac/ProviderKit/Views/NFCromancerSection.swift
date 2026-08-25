@@ -235,13 +235,13 @@ public struct NFCromancerSection: View {
     private func mockTagRow(_ tag: MockTag) -> some View {
         let isPresented = server.presentedMockTagId == tag.id
         return HStack(spacing: 8) {
-            Image(systemName: tag.kind == .uri ? "link" : tag.kind == .text ? "text.alignleft" : "number")
+            Image(systemName: tag.kind.iconName)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 1) {
                 Text(tag.name).font(.subheadline).lineLimit(1)
-                Text(tag.value)
+                Text(tag.displayValue)
                     .font(.caption2).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
             }
