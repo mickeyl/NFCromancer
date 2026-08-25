@@ -369,7 +369,20 @@ public struct NFCromancerSection: View {
                     Text("UID \(tag.uid)")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
-                    if tag.hasNDEF {
+                    if let text = tag.ndefText {
+                        Text(text)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 16)
+                    } else if let imageData = tag.ndefImage, let image = NSImage(data: imageData) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 120, maxHeight: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else if tag.hasNDEF {
                         Label("NDEF present", systemImage: "doc.text")
                             .font(.caption)
                             .foregroundStyle(.green)

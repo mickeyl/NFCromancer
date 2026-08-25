@@ -405,7 +405,9 @@ public final class TagServer: ObservableObject {
             tech: tag.tech == .iso7816 ? "ISO7816 (ISO-DEP)" : "Type 2 (NTAG/Ultralight)",
             isType2: tag.tech == .type2,
             hasNDEF: ndef != nil,
-            ndef: ndef
+            ndef: ndef,
+            ndefText: ndef.flatMap(NDEFDecoder.firstText),
+            ndefImage: ndef.flatMap(NDEFDecoder.firstImage)
         )
         DispatchQueue.main.async { self.presentedTag = presented }
     }
@@ -427,4 +429,8 @@ public struct PresentedTag: Equatable {
     public let hasNDEF: Bool
     /// The NDEF message read on arrival, for snapshotting into the library.
     public let ndef: Data?
+    /// The first Well-Known Text record's text, if the NDEF carries one.
+    public let ndefText: String?
+    /// The first image Media-type record's bytes, if the NDEF carries one.
+    public let ndefImage: Data?
 }
