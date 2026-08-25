@@ -44,6 +44,18 @@ final class ReaderSource {
     private var managerObservation: NSKeyValueObservation?
     private var card: TKSmartCard?
     private var present = false
+    /// Set only once `beginSession` has actually succeeded. `endSession` on a
+    /// card whose session never began (e.g. torn down mid-`beginSession`, as
+    /// happens when the slot flickers through states while a reader
+    /// enumerates) trips an internal CryptoTokenKit assert and aborts the
+    /// process — so `endCard()` must gate on this rather than on `card`
+    /// being non-nil.
+    private var sessionActive = false
+    /// Bumped on every `resolveCard`/`endCard`; callbacks capture the
+    /// generation they started under and discard themselves if it has since
+    /// moved on, so a stale `beginSession`/`transmit` reply for a card we've
+    /// already torn down can't act on it.
+    private var generation = 0
 
     /// Pseudo-APDU understood by PC/SC readers: read the tag UID.
     private static let getUID = Data([0xFF, 0xCA, 0x00, 0x00, 0x00])
@@ -131,17 +143,20 @@ final class ReaderSource {
             return
         }
         self.card = card
+        generation += 1
+        let myGeneration = generation
         let atr = slot.atr?.bytes ?? Data()
         let tech = Self.classify(atr: slot.atr)
         logger.debug("Card ATR=\(atr.map { String(format: "%02X", $0) }.joined()) hist=\((slot.atr?.historicalBytes ?? Data()).map { String(format: "%02X", $0) }.joined()) → \(tech == .iso7816 ? "ISO7816" : "Type2")")
 
         card.beginSession { [weak self] success, error in
             self?.queue.async {
-                guard let self else { return }
+                guard let self, self.generation == myGeneration else { return }
                 guard success else {
                     self.logger.error("Card beginSession failed: \(error?.localizedDescription ?? "?")")
                     return
                 }
+                self.sessionActive = true
                 self.readUID(card: card) { uid in
                     var tag = ReaderTag(
                         uid: uid,
@@ -157,6 +172,7 @@ final class ReaderSource {
                         transmit: { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
                     ) { ndef in
                         self.queue.async {
+                            guard self.generation == myGeneration else { return }
                             tag.ndef = ndef
                             self.notifyDetected(tag)
                         }
@@ -218,7 +234,11 @@ final class ReaderSource {
     }
 
     private func endCard() {
-        card?.endSession()
+        generation += 1
+        if sessionActive {
+            card?.endSession()
+        }
+        sessionActive = false
         card = nil
     }
 
