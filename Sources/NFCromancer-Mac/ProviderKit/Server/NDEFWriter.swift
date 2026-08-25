@@ -34,17 +34,15 @@ enum NDEFWriter {
         transmit: @escaping Transmit,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        // Page 3 is the Capability Container: [magic, version, MLEN, access].
-        // The access byte's low nibble is the write-access condition — 0x0 is
-        // open, anything else means the tag refuses every write. Checking it
-        // first turns a guaranteed page-4 failure into one precise error
-        // instead of a generic "may be locked" guess after the fact.
-        transmit(Data([0xFF, 0xB0, 0x00, 0x03, 0x04])) { cc, sw1, sw2 in
-            guard sw1 == 0x90, sw2 == 0x00, cc.count == 4 else {
-                completion(.failure(WriteError.writeFailed(page: 3, sw1: sw1, sw2: sw2)))
+        // Checking the write-access lock up front turns a guaranteed
+        // page-4 failure into one precise error instead of a generic
+        // "may be locked" guess after the fact.
+        Type2CapabilityContainer.read(transmit: transmit) { cc in
+            guard let cc else {
+                completion(.failure(WriteError.writeFailed(page: 3, sw1: 0, sw2: 0)))
                 return
             }
-            guard cc[cc.startIndex + 3] & 0x0F == 0x00 else {
+            guard !cc.isWriteLocked else {
                 completion(.failure(WriteError.locked))
                 return
             }
@@ -57,18 +55,7 @@ enum NDEFWriter {
         transmit: @escaping Transmit,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        var payload = Data([0x03])                  // NDEF-message TLV tag
-        if message.count < 0xFF {
-            payload.append(UInt8(message.count))
-        } else {
-            payload.append(0xFF)                    // 3-byte length form
-            payload.append(UInt8(message.count >> 8))
-            payload.append(UInt8(message.count & 0xFF))
-        }
-        payload.append(message)
-        payload.append(0xFE)                        // terminator TLV
-        while payload.count % 4 != 0 { payload.append(0x00) }
-
+        let payload = NDEFTLV.wrap(message, blockSize: 4)
         let pages = stride(from: 0, to: payload.count, by: 4).map { payload.subdata(in: $0..<($0 + 4)) }
         func writeNext(_ index: Int) {
             guard index < pages.count else { completion(.success(())); return }

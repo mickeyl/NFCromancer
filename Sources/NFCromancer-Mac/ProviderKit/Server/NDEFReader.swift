@@ -12,7 +12,7 @@ enum NDEFReader {
         switch tech {
             case .type2:         readType2(transmit: transmit, completion: completion)
             case .iso7816:       readType4(transmit: transmit, completion: completion)
-            case .mifareClassic: completion(nil)   // needs sector auth first; out of scope
+            case .mifareClassic: MifareClassicNDEF.read(transmit: transmit, completion: completion)
         }
     }
 
@@ -23,7 +23,7 @@ enum NDEFReader {
         // TLV blocks for the NDEF-message TLV (tag 0x03).
         readPages(transmit: transmit, start: 4, count: 24) { data in
             guard let data, !data.isEmpty else { completion(nil); return }
-            completion(parseTLV(data))
+            completion(NDEFTLV.firstNDEFMessage(in: data))
         }
     }
 
@@ -49,29 +49,6 @@ enum NDEFReader {
             }
         }
         readNext(start, count)
-    }
-
-    /// NDEF-message TLV in a Type 2 data area: `03 <len> <ndef…>` (len 0xFF ⇒
-    /// 3-byte length). Skips lock/memory-control TLVs (0x00, 0x01, 0x02).
-    private static func parseTLV(_ data: Data) -> Data? {
-        var i = data.startIndex
-        while i < data.endIndex {
-            let tag = data[i]; i += 1
-            if tag == 0x00 { continue }        // NULL TLV, no length
-            if tag == 0xFE { return nil }       // Terminator
-            guard i < data.endIndex else { return nil }
-            var len = Int(data[i]); i += 1
-            if len == 0xFF {                    // 3-byte length
-                guard i + 1 < data.endIndex else { return nil }
-                len = Int(data[i]) << 8 | Int(data[i+1]); i += 2
-            }
-            if tag == 0x03 {                    // NDEF message TLV
-                guard i + len <= data.endIndex else { return nil }
-                return data.subdata(in: i..<(i+len))
-            }
-            i += len                            // skip other TLVs
-        }
-        return nil
     }
 
     // MARK: - Type 4 (ISO-DEP): SELECT NDEF app → CC → NDEF file

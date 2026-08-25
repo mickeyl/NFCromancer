@@ -137,7 +137,7 @@ public final class TagServer: ObservableObject {
 
         public var errorDescription: String? {
             switch self {
-                case .noWritableCard: "Place a writable Type 2 tag (NTAG/Ultralight) on the reader first."
+                case .noWritableCard: "Place a writable Type 2 (NTAG/Ultralight) or already NDEF-formatted MIFARE Classic tag on the reader first."
                 case .noNDEF:         "This mock tag carries no NDEF message to write."
             }
         }
@@ -152,7 +152,7 @@ public final class TagServer: ObservableObject {
             let finish: (Result<Void, Error>) -> Void = { result in
                 DispatchQueue.main.async { completion(result) }
             }
-            guard let reading = self.pendingReaderTag, reading.tech == .type2 else {
+            guard let reading = self.pendingReaderTag, reading.tech == .type2 || reading.tech == .mifareClassic else {
                 finish(.failure(WriteRefused.noWritableCard))
                 return
             }
@@ -161,7 +161,8 @@ public final class TagServer: ObservableObject {
                 return
             }
             self.transport.note("Writing '\(tag.name)' to card…")
-            self.reader.writeType2NDEF(message) { [weak self] result in
+            let write = reading.tech == .mifareClassic ? self.reader.writeMifareClassicNDEF : self.reader.writeType2NDEF
+            write(message) { [weak self] result in
                 finish(result)
                 self?.transport.performOnIOQueue {
                     guard let self else { return }
@@ -403,11 +404,14 @@ public final class TagServer: ObservableObject {
             uid: tag.uid.map { String(format: "%02X", $0) }.joined(separator: " "),
             uidHex: tag.uid.map { String(format: "%02x", $0) }.joined(),
             tech: tag.tech.displayName,
-            isType2: tag.tech == .type2,
+            isWritable: tag.tech == .type2 || tag.tech == .mifareClassic,
             hasNDEF: ndef != nil,
             ndef: ndef,
             ndefText: ndef.flatMap(NDEFDecoder.firstText),
-            ndefImage: ndef.flatMap(NDEFDecoder.firstImage)
+            ndefImage: ndef.flatMap(NDEFDecoder.firstImage),
+            capacityLabel: tag.capacity.map { cc in
+                cc.ntagVariant.map { "\($0) · \(cc.capacityBytes) B" } ?? "\(cc.capacityBytes) B"
+            }
         )
         DispatchQueue.main.async { self.presentedTag = presented }
     }
@@ -424,8 +428,9 @@ public struct PresentedTag: Equatable {
     /// UID as compact lowercase hex, the form a captured mock stores.
     public let uidHex: String
     public let tech: String
-    /// True for Type 2 (NTAG/Ultralight) — the technology v1 can write.
-    public let isType2: Bool
+    /// True for Type 2 (NTAG/Ultralight) or an already NDEF-formatted
+    /// MIFARE Classic — the tech/formatting combinations v1 can write.
+    public let isWritable: Bool
     public let hasNDEF: Bool
     /// The NDEF message read on arrival, for snapshotting into the library.
     public let ndef: Data?
@@ -433,4 +438,7 @@ public struct PresentedTag: Equatable {
     public let ndefText: String?
     /// The first image Media-type record's bytes, if the NDEF carries one.
     public let ndefImage: Data?
+    /// The NTAG variant and/or usable NDEF capacity, e.g. "NTAG215 · 504 B" —
+    /// Type 2 tags only, from the capability container's MLEN byte.
+    public let capacityLabel: String?
 }

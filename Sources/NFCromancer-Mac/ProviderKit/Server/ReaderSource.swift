@@ -29,6 +29,8 @@ struct ReaderTag {
     var ndef: Data?
     /// Historical bytes / application data for the ISO7816 tag shim.
     var historicalBytes: Data
+    /// Capability container info, Type 2 tags only.
+    var capacity: Type2CapabilityContainer?
 }
 
 /// Wraps a USB NFC reader (ACR122U first) behind CryptoTokenKit. Slot state is
@@ -174,16 +176,26 @@ final class ReaderSource {
                         ndef: nil,
                         historicalBytes: slot.atr?.historicalBytes ?? Data()
                     )
+                    let transmit: NDEFReader.Transmit = { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
+
                     // Best-effort NDEF read on arrival; a card that refuses
                     // simply yields no NDEF (raw APDUs still work afterwards).
-                    NDEFReader.read(
-                        tech: tech,
-                        transmit: { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
-                    ) { ndef in
+                    let readNDEF: () -> Void = {
+                        NDEFReader.read(tech: tech, transmit: transmit) { ndef in
+                            self.queue.async {
+                                guard self.generation == myGeneration else { return }
+                                tag.ndef = ndef
+                                self.notifyDetected(tag)
+                            }
+                        }
+                    }
+
+                    guard tech == .type2 else { readNDEF(); return }
+                    Type2CapabilityContainer.read(transmit: transmit) { cc in
                         self.queue.async {
                             guard self.generation == myGeneration else { return }
-                            tag.ndef = ndef
-                            self.notifyDetected(tag)
+                            tag.capacity = cc
+                            readNDEF()
                         }
                     }
                 }
@@ -206,6 +218,23 @@ final class ReaderSource {
                 return
             }
             NDEFWriter.writeType2(
+                message: message,
+                transmit: { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
+            ) { result in
+                self.queue.async { completion(result) }
+            }
+        }
+    }
+
+    /// Writes an NDEF message into an already-formatted MIFARE Classic tag's
+    /// NFC sector(s) (see `MifareClassicNDEF`). Callback on the queue.
+    func writeMifareClassicNDEF(_ message: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        queue.async { [self] in
+            guard let card else {
+                completion(.failure(NoCard()))
+                return
+            }
+            MifareClassicNDEF.write(
                 message: message,
                 transmit: { apdu, done in self.transmit(card: card, apdu: apdu, completion: done) }
             ) { result in

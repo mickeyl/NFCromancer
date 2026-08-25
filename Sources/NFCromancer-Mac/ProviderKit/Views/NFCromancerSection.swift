@@ -327,6 +327,7 @@ public struct NFCromancerSection: View {
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.red)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
             }
         }
         .confirmationDialog(
@@ -337,7 +338,7 @@ public struct NFCromancerSection: View {
             Button("Write", role: .destructive) { performWrite(mock) }
             Button("Cancel", role: .cancel) { pendingWrite = nil }
         } message: { _ in
-            Text("This overwrites the tag's current NDEF content. Type 2 tags only.")
+            Text("This overwrites the tag's current NDEF content.")
         }
     }
 
@@ -366,6 +367,9 @@ public struct NFCromancerSection: View {
                     Text(tag.tech)
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    if let capacityLabel = tag.capacityLabel {
+                        capacityBadge(capacityLabel)
+                    }
                     Text("UID \(tag.uid)")
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -389,7 +393,7 @@ public struct NFCromancerSection: View {
                     }
                 }
                 captureButton(tag)
-                if tag.isType2 {
+                if tag.isWritable {
                     writeControl(tag)
                 }
             } else if server.readerAvailable {
@@ -423,6 +427,15 @@ public struct NFCromancerSection: View {
         .onChange(of: server.presentedTag?.uidHex) { _, _ in
             writeStatus = .idle
         }
+    }
+
+    private func capacityBadge(_ label: String) -> some View {
+        Text(label)
+            .font(.system(.caption2, design: .rounded).weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.accentColor))
     }
 
     private func placeholderBody(systemImage: String, message: String) -> some View {
